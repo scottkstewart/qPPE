@@ -2,7 +2,8 @@
 import sys
 import re
 import shelve
-from PyQt5.QtWidgets import (QMainWindow, QApplication, QListWidget, QDockWidget, QVBoxLayout, QWidget, QAction, QStyle, QFrame, QLabel, QTableWidget, QHeaderView, QTableWidgetItem)
+import webbrowser
+from PyQt5.QtWidgets import (QMainWindow, QApplication, QListWidget, QDockWidget, QVBoxLayout, QWidget, QAction, QStyle, QFrame, QLabel, QTableWidget, QHeaderView, QTableWidgetItem, QSplitter, QTabWidget, QStackedWidget)
 from PyQt5.QtCore import Qt
 from ppeMod import (phoenixClass, phoenixChecker)
 
@@ -25,36 +26,46 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("StudentVue")
 
-        self.gradetable = QTableWidget(self)
-        self.gradetable.setColumnCount(5)
-        self.gradetable.setHorizontalHeaderLabels(('Assignment', 'Numerator', 'Denominator', 'Percentage', 'Grade'))
-        self.gradetable.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-        self.setCentralWidget(self.gradetable)
-        self.gradetable.setAlternatingRowColors(True)
-        
-        accountDoc = QDockWidget("Class Picker", self)
-        accountDoc.setObjectName("Class Picker")
-        accountDoc.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
+        self.tabwidget = QTabWidget()
+        self.gradetables = [self.gradetable() for i in range(4)]
+        for ind, table in enumerate(self.gradetables):
+           self.tabwidget.addTab(table, 'Q&{}'.format(ind+1))
+
+        self.stackwidget = QStackedWidget()
+        self.accountOverview = self.gradetable(header=('Class', 'Q1', 'Q2', 'Q3', 'Q4'))
+        self.stackwidget.addWidget(self.accountOverview)
+        self.stackwidget.addWidget(self.tabwidget)
+
         self.accountlist = QListWidget()
         self.accountlist.setAlternatingRowColors(True)
         self.accountlist.itemPressed.connect(self.updateui)
+        self.accountlist.setSortingEnabled(True)
         self.classlist = QListWidget()
         self.classlist.setAlternatingRowColors(True)
         self.classlist.itemPressed.connect(self.updateui)
-        dockLayout = QVBoxLayout()
-        dockLayout.addWidget(self.accountlist)
-        dockLayout.addWidget(self.classlist)
-        dockWidget = QWidget()
-        dockWidget.setLayout(dockLayout)
-        accountDoc.setWidget(dockWidget)
-        self.addDockWidget(Qt.LeftDockWidgetArea, accountDoc)
+        
+        self.selectionSplitter = QSplitter(Qt.Vertical)
+        self.selectionSplitter.addWidget(self.accountlist)
+        self.selectionSplitter.addWidget(self.classlist)
+        self.selectionSplitter.setStretchFactor(0,1)
+        self.selectionSplitter.setStretchFactor(1,2)
+
+        self.mainSplitter = QSplitter(Qt.Horizontal)
+        self.mainSplitter.addWidget(self.selectionSplitter)
+        self.mainSplitter.addWidget(self.stackwidget)
+        self.mainSplitter.setStretchFactor(0,1)
+        self.mainSplitter.setStretchFactor(1,3)
+        self.setCentralWidget(self.mainSplitter)
+        self.tabwidget.currentChanged.connect(self.updateui)
 
         aboutAction = QAction("&About", self)
         aboutAction.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
+        aboutAction.triggered.connect(lambda: webbrowser.open('https://github.com/scottkstewart/qPPE', new=0, autoraise=True))
         settingsAction = QAction("&Settings", self)
         settingsAction.setIcon(self.style().standardIcon(QStyle.SP_TitleBarContextHelpButton))
         quitAction = QAction("&Quit", self)
         quitAction.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
+        quitAction.triggered.connect(QApplication.instance().quit)
 
         addAction = QAction("&Add an account", self)
         addAction.setIcon(self.style().standardIcon(QStyle.SP_FileDialogStart))
@@ -84,33 +95,58 @@ class MainWindow(QMainWindow):
 
         for key in self.accounts.keys():
             for cl in self.accounts[key].classes:
-                cl.setAssignments([('({}) Assignment number {}.'.format(key, i+1), 'G ({}/100)'.format(100-i)) for i in range(15)])
+                cl.setAssignments([[('({} Q{}) Assignment #{}.'.format(cl.getName(), j+1, i+1), 'G ({}/100)'.format(100-i)) for i in range(15)] for j in range(4)])
+                cl.setNumerator([1395, 1395, 1395, 1395])
+                cl.setDenominator([1500,1500,1500,1500])
+                cl.grade = ['A (93)', 'A (93)', 'A (93)', 'A (93)']
 
         self.updateui()
+
+    def gradetable(self, header=('Assignment', 'Numerator', 'Denominator', 'Percentage', 'Grade')):
+        table = QTableWidget(self)
+        table.setColumnCount(len(header))
+        table.setHorizontalHeaderLabels(header)
+        table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
+        table.setAlternatingRowColors(True)
+        return table
 
     def updateui(self):
         ind = self.accountlist.currentRow()
         self.accountlist.clear()
-        self.accountlist.addItems(sorted(self.accounts.keys()))
-        self.accountlist.setCurrentRow(ind)
+        self.accountlist.addItems(self.accounts.keys())
+        self.accountlist.setCurrentRow(ind if ind >= 0 else 0)
       
         ind = self.classlist.currentRow()
+        if ind < 0: ind = 0
         self.classlist.clear()
         if self.accountlist.currentItem() is not None:
+            self.classlist.addItem('OVERVIEW')
             self.classlist.addItems((cl.getName() for cl in self.accounts[self.accountlist.currentItem().text()].classes))
             self.classlist.setCurrentRow(ind)
         
         if self.classlist.currentItem() is not None:
-            assignmentList = self.accounts[self.accountlist.currentItem().text()].classes[ind].getAssignments()
-            self.gradetable.setRowCount(len(assignmentList))
-            for row, assignment in enumerate(assignmentList):
-                grade, num, denom = re.split("[/()]",assignment[1])[:3]
-                self.gradetable.setItem(row, 0, QTableWidgetItem(assignment[0]))
-                self.gradetable.setItem(row, 1, QTableWidgetItem(num))
-                self.gradetable.setItem(row, 2, QTableWidgetItem(denom))
-                self.gradetable.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(int(num)/int(denom)*100)))
-                self.gradetable.setItem(row, 4, QTableWidgetItem(grade[:-1]))
-                for i in range(0, 5): self.gradetable.item(row, i).setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable) 
+            if ind > 0:
+                self.stackwidget.setCurrentIndex(1)
+                assignmentList = self.accounts[self.accountlist.currentItem().text()].classes[ind-1].getAssignments()[self.tabwidget.currentIndex()]
+                table = self.tabwidget.currentWidget()
+                table.setRowCount(len(assignmentList))
+                for row, assignment in enumerate(assignmentList):
+                    grade, num, denom = re.split("[/()]",assignment[1])[:3]
+                    table.setItem(row, 0, QTableWidgetItem(assignment[0]))
+                    table.setItem(row, 1, QTableWidgetItem(num))
+                    table.setItem(row, 2, QTableWidgetItem(denom))
+                    table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(int(num)/int(denom)*100)))
+                    table.setItem(row, 4, QTableWidgetItem(grade[:-1]))
+                    for i in range(0, 5): table.item(row, i).setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable) 
+            else:
+                self.stackwidget.setCurrentIndex(0)
+                classes = self.accounts[self.accountlist.currentItem().text()].classes
+                self.accountOverview.setRowCount(len(classes))
+                for row, cl in enumerate(classes):
+                    self.accountOverview.setItem(row, 0, QTableWidgetItem(cl.getName()))
+                    for q in range(4):
+                        self.accountOverview.setItem(row, q+1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[q], str(cl.getNumerator()[q]), str(cl.getDenominator()[q]))))
+                    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
