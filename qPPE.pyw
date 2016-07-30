@@ -4,13 +4,14 @@ import re
 import shelve
 import webbrowser
 import phoenix
-from PyQt5.QtWidgets import (QMainWindow, QApplication, QListWidget, QDockWidget, QVBoxLayout, QWidget, QAction, QStyle, QFrame, QLabel, QTableWidget, QHeaderView, QTableWidgetItem, QSplitter, QTabWidget, QStackedWidget, QHBoxLayout, QSpacerItem, QSizePolicy)
+import datetime
+from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt
-from ppeMod import (phoenixClass, phoenixChecker)
+from ppeMod import PhoenixClass, PhoenixChecker
 
 __version__ = "1.0.0"
 
-class TestPC(phoenixChecker):
+class TestPC(PhoenixChecker):
     """Stub-filled class for testing during the summer"""
     def updatePage(self):
         pass
@@ -18,9 +19,76 @@ class TestPC(phoenixChecker):
         pass
     def urlUpdatae(self):
         pass
-    def __init__(self, user, password, email, classes=phoenixClass(None, 'Default')):    
+    def __init__(self, user, password, email, classes=PhoenixClass(None, 'Default')):    
         self.classes = [cl for cl in classes]
         self.username='filler'
+
+class AddDlg(QDialog):
+    """Dialog for adding accounts to be displayed"""
+    def __init__(self, parent=None):
+        super(AddDlg, self).__init__(parent)
+        grid = QGridLayout() 
+        self.setLayout(grid)
+        
+        # username label/text box with with normal echo 
+        username_label = QLabel("&Username:")
+        self.username = QLineEdit()
+        username_label.setBuddy(self.username)
+        grid.addWidget(username_label, 0, 0)
+        grid.addWidget(self.username, 0, 1) 
+
+        # password label/text box which defaults to password-style echo
+        password_label = QLabel("&Password:")
+        self.password = QLineEdit()
+        password_label.setBuddy(self.password)
+        self.password.setEchoMode(QLineEdit.Password)
+        grid.addWidget(password_label, 1, 0)
+        grid.addWidget(self.password, 1, 1) 
+
+        # checkbox to show password when clicked
+        self.show_password = QCheckBox("&Show Password")
+        self.show_password.stateChanged.connect(lambda: self.password.setEchoMode(QLineEdit.Normal if self.show_password.checkState() else QLineEdit.Password))
+        grid.addWidget(self.show_password, 2, 0, 1, 2)
+
+        # email label/text box with normal echo
+        email_label = QLabel("&Email:")
+        self.email = QLineEdit()
+        email_label.setBuddy(self.email)
+        grid.addWidget(email_label, 3, 0)
+        grid.addWidget(self.email, 3, 1)
+
+        # red error label, only visible after bad login
+        self.error_label = QLabel("<font color=red>Bot invalid, no grades found.</font>")
+        self.error_label.setVisible(False)
+        grid.addWidget(self.error_label, 4, 0, 1, 2)
+
+        # ok/cancel buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        grid.addWidget(buttons, 5, 0, 1, 2)
+
+    def accept(self):
+        '''Validates and logs the bots, closing the dialog if successful but displaying an error and allowing retries if
+           unsuccessful'''    
+        username = self.username.text()
+        try:
+            bot = PhoenixChecker(username, self.password.text(), self.email.text())
+        except IndexError:                      # index error is typical of an incorrect password in PPE
+            self.error_label.setVisible(True)
+        else:
+            data = shelve.open('/etc/ppe/data')
+            # open messagebox to double check overwrite if the bot already exists
+            if not username in data['accounts'].keys() or QMessageBox.question(self,
+                                                                "Overwrite?", 
+                                                                "Are you sure you want to overwrite bot {}?".format(username), 
+                                                                QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                data['accounts'][username] = bot
+                phoenix.log('[{}] {} added to database.'.format(str(datetime.datetime.now()), username))
+               
+            data.close()
+            QDialog.accept(self)
 
 class MainWindow(QMainWindow):
     """Class to display current status of LCPS' StudentVue"""
@@ -92,6 +160,7 @@ class MainWindow(QMainWindow):
         # create actions for use with "edit" menu for manipulating accout list
         add_action = QAction("&Add an account", self)
         add_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogStart))
+        add_action.triggered.connect(self.addAccount)
         edit_action = QAction("&Edit current account", self)
         edit_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
         remove_action = QAction("&Remove current account", self)
@@ -103,12 +172,11 @@ class MainWindow(QMainWindow):
         edit_menu = self.menuBar().addMenu("&Accounts")    
         edit_menu.addActions((add_action, edit_action, remove_action))
 
-        # add status bar and show placeholder message
+        # add status bar
         self.status_label = QLabel(phoenix.status(quiet=True))
         self.status_label.setFrameStyle(QFrame.StyledPanel|QFrame.Sunken)
-        status = self.statusBar()
-        status.addPermanentWidget(self.status_label)
-        status.showMessage("Message here for 5 seconds", 5000) 
+        self.status_bar = self.statusBar()
+        self.status_bar.addPermanentWidget(self.status_label)
    
         # get data from PPE database 
         data = shelve.open('/etc/ppe/data')
@@ -118,7 +186,7 @@ class MainWindow(QMainWindow):
         # placeholder data for testing during summer
         nl = ('AP Economics', 'AP Statistics', 'AP Government', 'AP Physics C: Mechanics', 'English 12 DE', 'Independent Science Research', 'Geospacial Science DE')
         for i in range(0,10):
-            self.accounts['{:06d}'.format(i*111111)] = TestPC('{:06d}'.format(i*111111), 'password', 'test@email.com', (phoenixClass(None, '({}) {}'.format(i, a)) for a in nl))
+            self.accounts['{:06d}'.format(i*111111)] = TestPC('{:06d}'.format(i*111111), 'password', 'test@email.com', (PhoenixClass(None, '({}) {}'.format(i, a)) for a in nl))
             self.accounts['{:06d}'.format(i*111111)].currentQuarter = 3            
 
         for account in self.accounts.values():
@@ -128,14 +196,17 @@ class MainWindow(QMainWindow):
                 pClass.setDenominator([1500,1500,1500,1500])
                 pClass.grade = ['A (93)', 'A (93)', 'A (93)', 'A (93)']
 
+        data = shelve.open('/etc/ppe/data')
+        data['accounts'] = self.accounts
+        data.close()
+
         # set the tab index to the current quarter (updates ui)
         self.quarter_tabs.setCurrentIndex(list(self.accounts.values())[0].currentQuarter-1)
 
     
     def gradetable(self, header=('Assignment', 'Numerator', 'Denominator', 'Percentage', 'Grade')):
         '''Helper method which constructs and returns a QTableWidget with the specified header, no vertical header, and
-           stretched first column
-        '''
+           stretched first column'''
         table = QTableWidget(self)
         table.setColumnCount(len(header))
         table.setHorizontalHeaderLabels(header)
@@ -153,6 +224,12 @@ class MainWindow(QMainWindow):
         table.horizontalHeader().hide()
         table.setMaximumWidth(402)
         return table
+
+    def addAccount(self):
+        '''Show dialog to add an account to the database, giving a 5s message on the status bar if successful'''
+        dlg = AddDlg(self)
+        if dlg.exec_():
+            self.status_bar.showMessage('Account {} added.'.format(dlg.username.text()), 5000)         
 
     def updateui(self):
         '''Updates the ui on state changes'''
