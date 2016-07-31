@@ -6,7 +6,7 @@ import webbrowser
 import phoenix
 import datetime
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from ppeMod import PhoenixClass, PhoenixChecker
 
 __version__ = "1.0.0"
@@ -21,54 +21,63 @@ class TestPC(PhoenixChecker):
         pass
     def __init__(self, user, password, email, classes=PhoenixClass(None, 'Default')):    
         self.classes = [cl for cl in classes]
-        self.username='filler'
+        self.username=user
+        self.password='password'
+        self.email='filler@email.com'
 
-class AddDlg(QDialog):
-    """Dialog for adding accounts to be displayed"""
-    def __init__(self, parent=None):
-        super(AddDlg, self).__init__(parent)
-        grid = QGridLayout() 
-        self.setLayout(grid)
-        
-        # username label/text box with with normal echo 
-        username_label = QLabel("&Username:")
-        self.username = QLineEdit()
-        username_label.setBuddy(self.username)
-        grid.addWidget(username_label, 0, 0)
-        grid.addWidget(self.username, 0, 1) 
+class AccountDlg(QDialog):
+    """Skeleton for account-action dialogs, doesn't include username or custom accept()"""
+    def __init__(self, parent=None, title="Account Action"):
+        # leave space open for custom username display
+        super(AccountDlg, self).__init__(parent)
+        self.setWindowTitle(title)
+        self.grid = QGridLayout() 
+        self.setLayout(self.grid)
 
         # password label/text box which defaults to password-style echo
         password_label = QLabel("&Password:")
         self.password = QLineEdit()
         password_label.setBuddy(self.password)
         self.password.setEchoMode(QLineEdit.Password)
-        grid.addWidget(password_label, 1, 0)
-        grid.addWidget(self.password, 1, 1) 
+        self.grid.addWidget(password_label, 1, 0)
+        self.grid.addWidget(self.password, 1, 1) 
 
         # checkbox to show password when clicked
         self.show_password = QCheckBox("&Show Password")
         self.show_password.stateChanged.connect(lambda: self.password.setEchoMode(QLineEdit.Normal if self.show_password.checkState() else QLineEdit.Password))
-        grid.addWidget(self.show_password, 2, 0, 1, 2)
+        self.grid.addWidget(self.show_password, 2, 0, 1, 2)
 
         # email label/text box with normal echo
         email_label = QLabel("&Email:")
         self.email = QLineEdit()
         email_label.setBuddy(self.email)
-        grid.addWidget(email_label, 3, 0)
-        grid.addWidget(self.email, 3, 1)
+        self.grid.addWidget(email_label, 3, 0)
+        self.grid.addWidget(self.email, 3, 1)
 
         # red error label, only visible after bad login
         self.error_label = QLabel("<font color=red>Bot invalid, no grades found.</font>")
         self.error_label.setVisible(False)
-        grid.addWidget(self.error_label, 4, 0, 1, 2)
+        self.grid.addWidget(self.error_label, 4, 0, 1, 2)
 
         # ok/cancel buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
-        grid.addWidget(buttons, 5, 0, 1, 2)
+        self.grid.addWidget(buttons, 5, 0, 1, 2)
 
+class AddDlg(AccountDlg):
+    """Dialog for adding accounts to be displayed"""
+    def __init__(self, parent=None):
+        '''Add username line-edit in the whole left in the super's grid, and focus when available'''
+        super(AddDlg, self).__init__(parent, "Add Account")
+        self.username = QLineEdit()
+        username_label = QLabel("&Username:")
+        username_label.setBuddy(self.username)
+        self.grid.addWidget(username_label, 0, 0)
+        self.grid.addWidget(self.username, 0, 1) 
+        QTimer.singleShot(0, self.username.setFocus)
+    
     def accept(self):
         '''Validates and logs the bots, closing the dialog if successful but displaying an error and allowing retries if
            unsuccessful'''    
@@ -88,6 +97,52 @@ class AddDlg(QDialog):
                 phoenix.log('[{}] {} added to database.'.format(str(datetime.datetime.now()), username))
                
             data.close()
+            QDialog.accept(self)
+
+class EditDlg(AccountDlg):
+    """Dialog for editing accounts to be displayed (mostly email since password changes are problematic)"""
+    def __init__(self, parent=None, account=None):
+        self.account = account
+        
+        # Fill hole in super's grid with labels
+        super(EditDlg, self).__init__(parent, "Edit Account")
+        username_title = QLabel("Username: ")
+        username_label = QLabel(self.account.username)
+        self.grid.addWidget(username_title, 0, 0)
+        self.grid.addWidget(username_label, 0, 1)
+
+        # Populate email field
+        self.email.setText(self.account.email)
+
+    def accept(self):
+        '''Adds changes to bot if there are any, validating changed passwords'''
+        username = self.account.username
+        email = self.account.email
+        if self.password.text() != self.account.password:
+            try:
+                bot = PhoenixChecker(username, self.password.text(), email)
+            except IndexError:                  # index error is typical of an incorrect password in PPE
+                self.error_label.setVisible(True)
+            else:
+                # if the password is changed successfully, log edit (email if changed) and accept
+                self.edits = "{}'s password {}changed.".format(username, '' if self.email.text() == email else 'and email ')
+                data=shelve.open('/etc/ppe/data')
+                data['accounts'][username] = bot
+                data.close()
+                phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
+                QDialog.accept(self)
+        elif self.email.text() != email:
+            # if only email is changed, validate, log, and accept
+            self.account.email = email
+            self.edits = "{}'s email changed".format(username)
+            data=shelve.open('/etc/ppe/data')
+            data['accounts'][username] = self.account
+            data.close()
+            phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
+            QDialog.accept(self)
+        else:
+            # if it's the same, exit with a message about nothing being edited
+            self.edits = "No edits made on {}".format(username)
             QDialog.accept(self)
 
 class MainWindow(QMainWindow):
@@ -163,8 +218,10 @@ class MainWindow(QMainWindow):
         add_action.triggered.connect(self.addAccount)
         edit_action = QAction("&Edit current account", self)
         edit_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        edit_action.triggered.connect(self.editAccount)
         remove_action = QAction("&Remove current account", self)
         remove_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogEnd))
+        remove_action.triggered.connect(self.removeAccount)    
 
         # create file and edit menus populated with previous actions
         file_menu = self.menuBar().addMenu("&File")    
@@ -230,9 +287,37 @@ class MainWindow(QMainWindow):
         dlg = AddDlg(self)
         if dlg.exec_():
             self.status_bar.showMessage('Account {} added.'.format(dlg.username.text()), 5000)         
+            self.updateui()
+    
+    def editAccount(self):
+        '''Show dialog to edit the current account, giving a 5s message on the status bar when applied'''
+        data = shelve.open('/etc/ppe/data') 
+        dlg = EditDlg(self, data['accounts'][self.account_list.currentItem().text()])
+        data.close()
+        if dlg.exec_():
+            self.status_bar.showMessage(dlg.edits, 5000)
+            self.updateui()
+
+    def removeAccount(self):
+        '''Confirm the user wants to delete the current account, then delete it.'''
+        username = self.account_list.currentItem().text()
+        if QMessageBox.question(self,
+                                'Remove Account',
+                                'Are you sure you want to remove account {}?'.format(username),
+                                QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+            data = shelve.open('/etc/ppe/data', writeback=True)
+            del data['accounts'][username]
+            data.close()
+            self.status_bar.showMessage('Account {} deleted.'.format(username))
+            self.updateui()
 
     def updateui(self):
         '''Updates the ui on state changes'''
+        # sync accounts with database
+        data = shelve.open('/etc/ppe/data')
+        self.accounts = data['accounts']
+        data.close()
+
         # set status to whether or not the daemon is running
         self.status_label.setText(phoenix.status(quiet=True))
 
