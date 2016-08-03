@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 import sys
+import os
 import re
 import shelve
 import webbrowser
 import phoenix
 import datetime
+import signal
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QSettings
 from ppeMod import PhoenixClass, PhoenixChecker
-
-__version__ = "1.0.0"
+from qppe.dialogs import SettingsDlg, AddDlg, EditDlg
 
 class TestPC(PhoenixChecker):
     """Stub-filled class for testing during the summer"""
@@ -25,131 +26,18 @@ class TestPC(PhoenixChecker):
         self.password='password'
         self.email='filler@email.com'
 
-class AccountDlg(QDialog):
-    """Skeleton for account-action dialogs, doesn't include username or custom accept()"""
-    def __init__(self, parent=None, title="Account Action"):
-        # leave space open for custom username display
-        super(AccountDlg, self).__init__(parent)
-        self.setWindowTitle(title)
-        self.grid = QGridLayout() 
-        self.setLayout(self.grid)
-
-        # password label/text box which defaults to password-style echo
-        password_label = QLabel("&Password:")
-        self.password = QLineEdit()
-        password_label.setBuddy(self.password)
-        self.password.setEchoMode(QLineEdit.Password)
-        self.grid.addWidget(password_label, 1, 0)
-        self.grid.addWidget(self.password, 1, 1) 
-
-        # checkbox to show password when clicked
-        self.show_password = QCheckBox("&Show Password")
-        self.show_password.stateChanged.connect(lambda: self.password.setEchoMode(QLineEdit.Normal if self.show_password.checkState() else QLineEdit.Password))
-        self.grid.addWidget(self.show_password, 2, 0, 1, 2)
-
-        # email label/text box with normal echo
-        email_label = QLabel("&Email:")
-        self.email = QLineEdit()
-        email_label.setBuddy(self.email)
-        self.grid.addWidget(email_label, 3, 0)
-        self.grid.addWidget(self.email, 3, 1)
-
-        # red error label, only visible after bad login
-        self.error_label = QLabel("<font color=red>Bot invalid, no grades found.</font>")
-        self.error_label.setVisible(False)
-        self.grid.addWidget(self.error_label, 4, 0, 1, 2)
-
-        # ok/cancel buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        self.grid.addWidget(buttons, 5, 0, 1, 2)
-
-class AddDlg(AccountDlg):
-    """Dialog for adding accounts to be displayed"""
-    def __init__(self, parent=None):
-        '''Add username line-edit in the whole left in the super's grid, and focus when available'''
-        super(AddDlg, self).__init__(parent, "Add Account")
-        self.username = QLineEdit()
-        username_label = QLabel("&Username:")
-        username_label.setBuddy(self.username)
-        self.grid.addWidget(username_label, 0, 0)
-        self.grid.addWidget(self.username, 0, 1) 
-        QTimer.singleShot(0, self.username.setFocus)
-    
-    def accept(self):
-        '''Validates and logs the bots, closing the dialog if successful but displaying an error and allowing retries if
-           unsuccessful'''    
-        username = self.username.text()
-        try:
-            bot = PhoenixChecker(username, self.password.text(), self.email.text())
-        except IndexError:                      # index error is typical of an incorrect password in PPE
-            self.error_label.setVisible(True)
-        else:
-            data = shelve.open('/etc/ppe/data')
-            # open messagebox to double check overwrite if the bot already exists
-            if not username in data['accounts'].keys() or QMessageBox.question(self,
-                                                                "Overwrite?", 
-                                                                "Are you sure you want to overwrite bot {}?".format(username), 
-                                                                QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-                data['accounts'][username] = bot
-                phoenix.log('[{}] {} added to database.'.format(str(datetime.datetime.now()), username))
-               
-            data.close()
-            QDialog.accept(self)
-
-class EditDlg(AccountDlg):
-    """Dialog for editing accounts to be displayed (mostly email since password changes are problematic)"""
-    def __init__(self, parent=None, account=None):
-        self.account = account
-        
-        # Fill hole in super's grid with labels
-        super(EditDlg, self).__init__(parent, "Edit Account")
-        username_title = QLabel("Username: ")
-        username_label = QLabel(self.account.username)
-        self.grid.addWidget(username_title, 0, 0)
-        self.grid.addWidget(username_label, 0, 1)
-
-        # Populate email field
-        self.email.setText(self.account.email)
-
-    def accept(self):
-        '''Adds changes to bot if there are any, validating changed passwords'''
-        username = self.account.username
-        email = self.account.email
-        if self.password.text() != self.account.password:
-            try:
-                bot = PhoenixChecker(username, self.password.text(), email)
-            except IndexError:                  # index error is typical of an incorrect password in PPE
-                self.error_label.setVisible(True)
-            else:
-                # if the password is changed successfully, log edit (email if changed) and accept
-                self.edits = "{}'s password {}changed.".format(username, '' if self.email.text() == email else 'and email ')
-                data=shelve.open('/etc/ppe/data')
-                data['accounts'][username] = bot
-                data.close()
-                phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
-                QDialog.accept(self)
-        elif self.email.text() != email:
-            # if only email is changed, validate, log, and accept
-            self.account.email = email
-            self.edits = "{}'s email changed".format(username)
-            data=shelve.open('/etc/ppe/data')
-            data['accounts'][username] = self.account
-            data.close()
-            phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
-            QDialog.accept(self)
-        else:
-            # if it's the same, exit with a message about nothing being edited
-            self.edits = "No edits made on {}".format(username)
-            QDialog.accept(self)
-
 class MainWindow(QMainWindow):
     """Class to display current status of LCPS' StudentVue"""
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("StudentVue")
+
+        self.settings = QSettings('Scott Stewart', 'qPPE')
+        self.settings.beginGroup('Settings Dialog')   
+        handle = SettingsDlg.str_bool(self.settings.value('handle_ppe'))
+        self.exit_on_close = handle  and phoenix.status(True) == 'Running'
+        if handle:
+            phoenix.daemon_exit(quiet=True)
 
         # make and populate a set of tabs per quarter (updated with classlist)
         self.quarter_tabs = QTabWidget()
@@ -208,12 +96,13 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(lambda: webbrowser.open('https://github.com/scottkstewart/qPPE', new=0, autoraise=True))
         setting_action = QAction("&Settings", self)
         setting_action.setIcon(self.style().standardIcon(QStyle.SP_TitleBarContextHelpButton))
+        setting_action.triggered.connect(self.getSettings)
         quit_action = QAction("&Quit", self)
         quit_action.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
         quit_action.triggered.connect(QApplication.instance().quit)
 
         # create actions for use with "edit" menu for manipulating accout list
-        add_action = QAction("&Add an account", self)
+        add_action = QAction("A&dd an account", self)
         add_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogStart))
         add_action.triggered.connect(self.addAccount)
         edit_action = QAction("&Edit current account", self)
@@ -260,6 +149,8 @@ class MainWindow(QMainWindow):
         # set the tab index to the current quarter (updates ui)
         self.quarter_tabs.setCurrentIndex(list(self.accounts.values())[0].currentQuarter-1)
 
+        if handle:
+            os.system('phoenix start -n')   # fix later
     
     def gradetable(self, header=('Assignment', 'Numerator', 'Denominator', 'Percentage', 'Grade')):
         '''Helper method which constructs and returns a QTableWidget with the specified header, no vertical header, and
@@ -281,6 +172,13 @@ class MainWindow(QMainWindow):
         table.horizontalHeader().hide()
         table.setMaximumWidth(402)
         return table
+
+    def getSettings(self):
+        '''Show settings dialog and lock in any changed settings'''
+        dlg = SettingsDlg(self)
+        if dlg.exec_() and dlg.changes:
+            self.status_bar.showMessage("Settings updated ({:02x}).".format(dlg.changes), 5000)
+            self.settings.sync()
 
     def addAccount(self):
         '''Show dialog to add an account to the database, giving a 5s message on the status bar if successful'''
@@ -309,6 +207,7 @@ class MainWindow(QMainWindow):
             del data['accounts'][username]
             data.close()
             self.status_bar.showMessage('Account {} deleted.'.format(username))
+            phoenix.log('[{}] Account {} deleted.'.format(str(datetime.datetime.now()), username))
             self.updateui()
 
     def updateui(self):
@@ -374,6 +273,12 @@ class MainWindow(QMainWindow):
                     for q in range(4):
                         self.overview_table.setItem(row, q+1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[q], str(cl.getNumerator()[q]), str(cl.getDenominator()[q])))) 
                         self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+
+    def closeEvent(self, event):
+        if self.exit_on_close:
+            phoenix.daemon_exit()
+            print('close on exit')
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
