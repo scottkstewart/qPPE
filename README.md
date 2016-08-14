@@ -1,5 +1,5 @@
 # qPPE
 
-(Right now this is literally nothing, likely will stay in extremely early stages until studentvue is live for the year)
+(Everything on this program is poorly tested, don't expect it to function until a few weeks into the school year)
 
 GUI Extension of Phoenix-parse-email based on QT -- meant to remove any interaction with studentvue
