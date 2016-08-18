@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import sys
 import re
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QSpinBox
+from PyQt5.QtCore import Qt, QRegExp
+from PyQt5.QtGui import QRegExpValidator
 class TimeSpinBox(QSpinBox):
     """Custom widget to collect an interval in time, used primarily in the settings dialog"""
     SUFFIXES = {'s': 1, 'm':60, 'h':60*60, 'd':60*60*24}

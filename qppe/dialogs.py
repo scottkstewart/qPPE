@@ -8,7 +8,8 @@ import phoenix
 import datetime
 import signal
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtCore import Qt, QTimer, QSettings, QRegExp
+from PyQt5.QtGui import QRegExpValidator
 from ppeMod import PhoenixClass, PhoenixChecker
 from qppe.widgets import TimeSpinBox
 
@@ -168,6 +169,7 @@ class AccountDlg(QDialog):
         # email label/text box with normal echo
         email_label = QLabel("&Email:")
         self.email = QLineEdit()
+        self.email.setValidator(QRegExpValidator(QRegExp(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", Qt.CaseInsensitive)))
         email_label.setBuddy(self.email)
         self.grid.addWidget(email_label, 3, 0)
         self.grid.addWidget(self.email, 3, 1)
@@ -264,7 +266,9 @@ class EditDlg(AccountDlg):
             QDialog.accept(self)
 
 class SelectDlg(QDialog):
+    '''Dialog to select an account fom all logged accounts (same as accountlist)'''
     def __init__(self, parent, accounts):
+        '''Just a simple label and combo box'''
         super(SelectDlg, self).__init__(parent)
         self.account_list = accounts
         self.setWindowTitle("Select Account")
@@ -287,5 +291,6 @@ class SelectDlg(QDialog):
         layout.addWidget(self.account_box)
 
     def accept(self):
+        '''Update the accountlist and exit'''
         self.account_list.setCurrentRow(self.account_box.currentIndex())
         QDialog.accept(self)

@@ -65,12 +65,15 @@ class MainWindow(QMainWindow):
             overall_widget.setLayout(overall_layout)
             self.quarter_tabs.addTab(overall_widget, 'Q&{}'.format(ind+1))
 
-        # create stack widget to switch between tabs and overview
+        # create stack widget to switch between tabs, overview, and label for no classes
         self.stack_widget = QStackedWidget()
         self.overview_table = self.gradetable(header=('Class', 'Q1', 'Q2', 'Q3', 'Q4'))
         self.overview_table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.stack_widget.addWidget(self.overview_table)
         self.stack_widget.addWidget(self.quarter_tabs)
+        empty_label = QLabel("No classes are selected.")
+        empty_label.setAlignment(Qt.AlignCenter)
+        self.stack_widget.addWidget(empty_label)
 
         # make lists of accounts (sorted) and classes, updating ui when an item is pressed
         self.account_list = QListWidget()
@@ -118,7 +121,7 @@ class MainWindow(QMainWindow):
         edit_action = QAction("&Edit current account", self)
         edit_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
         edit_action.triggered.connect(self.editAccount)
-        select_action = QAction("S&elect Account", self)
+        select_action = QAction("Se&lect Account", self)
         select_action.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion))
         select_action.triggered.connect(self.selectAccount)
         remove_action = QAction("&Remove current account", self)
@@ -223,7 +226,7 @@ class MainWindow(QMainWindow):
         '''Show dialog to select an account from the list'''
         dlg = SelectDlg(self, self.account_list)
         if dlg.exec_():
-            self.status_bar.showMessage('Account {:06d} selected.'.format(9), 5000)
+            self.status_bar.showMessage('Account {} selected.'.format(dlg.account_box.currentText()), 5000)
 
     def removeAccount(self):
         '''Confirm the user wants to delete the current account, then delete it.'''
@@ -235,6 +238,7 @@ class MainWindow(QMainWindow):
             data = shelve.open('/etc/ppe/data', writeback=True)
             del data['accounts'][username]
             data.close()
+            self.account_list.takeItem(self.account_list.currentRow())
             self.status_bar.showMessage('Account {} deleted.'.format(username))
             phoenix.log('[{}] Account {} deleted.'.format(str(datetime.datetime.now()), username))
             self.updateui()
@@ -267,55 +271,58 @@ class MainWindow(QMainWindow):
                 self.class_list.addItems((cl.getName() for cl in self.accounts[self.account_list.currentItem().text()].classes))
                 self.class_list.setCurrentRow(ind)
         
-        # populate main widget
-        if self.class_list.currentItem() is not None:
-            # if "OVERVIEW" is selected
-            if ind > 0:
-                # set stackedwidget to the tab widget, get the class, and populate the totals table
-                self.stack_widget.setCurrentIndex(1)
-                cl = self.accounts[self.account_list.currentItem().text()].classes[ind-1]
-                ind = self.quarter_tabs.currentIndex()                
-                totals_table = self.class_totals[ind]
-                totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
-                totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
-                totals_table.setItem(0, 2, QTableWidgetItem('{:0.1f}%'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100)))
-                totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
-                for i in range(4): 
-                    totals_table.item(0,i).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                    totals_table.item(0,i).setTextAlignment(Qt.AlignCenter)
+            # populate main widget
+            if self.class_list.currentItem() is not None:
+                # if "OVERVIEW" is selected
+                if ind > 0:
+                    # set stackedwidget to the tab widget, get the class, and populate the totals table
+                    self.stack_widget.setCurrentIndex(1)
+                    cl = self.accounts[self.account_list.currentItem().text()].classes[ind-1]
+                    ind = self.quarter_tabs.currentIndex()                
+                    totals_table = self.class_totals[ind]
+                    totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
+                    totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
+                    totals_table.setItem(0, 2, QTableWidgetItem('{:0.1f}%'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100)))
+                    totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
+                    for i in range(4): 
+                        totals_table.item(0,i).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                        totals_table.item(0,i).setTextAlignment(Qt.AlignCenter)
 
-                # get assignments and populate table of all assignments
-                assignmentList = cl.getAssignments()[ind]
-                table = self.grade_tables[ind]
-                table.setRowCount(len(assignmentList))
-                for row, assignment in enumerate(assignmentList):
-                    grade, num, denom = re.split("[/()]",assignment[1])[:3]
-                    table.setItem(row, 0, QTableWidgetItem(assignment[0]))
-                    table.setItem(row, 1, QTableWidgetItem(num))
-                    table.setItem(row, 2, QTableWidgetItem(denom))
-                    table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(int(num)/int(denom)*100)))
-                    table.setItem(row, 4, QTableWidgetItem(grade[:-1]))
-                    table.item(row, 0).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                    for i in range(1, 5):
-                        table.item(row, i).setFlags(Qt.ItemIsEnabled)
-                        table.item(row, i).setTextAlignment(Qt.AlignCenter)
+                    # get assignments and populate table of all assignments
+                    assignmentList = cl.getAssignments()[ind]
+                    table = self.grade_tables[ind]
+                    table.setRowCount(len(assignmentList))
+                    for row, assignment in enumerate(assignmentList):
+                        grade, num, denom = re.split("[/()]",assignment[1])[:3]
+                        table.setItem(row, 0, QTableWidgetItem(assignment[0]))
+                        table.setItem(row, 1, QTableWidgetItem(num))
+                        table.setItem(row, 2, QTableWidgetItem(denom))
+                        table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(int(num)/int(denom)*100)))
+                        table.setItem(row, 4, QTableWidgetItem(grade[:-1]))
+                        table.item(row, 0).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                        for i in range(1, 5):
+                            table.item(row, i).setFlags(Qt.ItemIsEnabled)
+                            table.item(row, i).setTextAlignment(Qt.AlignCenter)
 
-            else: #if a class is selected
-                # set stackedwidget to the overview widget, get classes, and populate with a per-quarter overview of each class
-                self.stack_widget.setCurrentIndex(0)
-                classes = self.accounts[self.account_list.currentItem().text()].classes
-                self.overview_table.setRowCount(len(classes))
-                for row, cl in enumerate(classes):
-                    self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
-                    self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
-                    for q in range(4):
-                        self.overview_table.setItem(row, q+1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[q], str(cl.getNumerator()[q]), str(cl.getDenominator()[q])))) 
-                        self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                        self.overview_table.item(row, q+1).setTextAlignment(Qt.AlignCenter)
+                else: #if a class is selected
+                    # set stackedwidget to the overview widget, get classes, and populate with a per-quarter overview of each class
+                    self.stack_widget.setCurrentIndex(0)
+                    classes = self.accounts[self.account_list.currentItem().text()].classes
+                    self.overview_table.setRowCount(len(classes))
+                    for row, cl in enumerate(classes):
+                        self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
+                        self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
+                        for q in range(4):
+                            self.overview_table.setItem(row, q+1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[q], str(cl.getNumerator()[q]), str(cl.getDenominator()[q])))) 
+                            self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                            self.overview_table.item(row, q+1).setTextAlignment(Qt.AlignCenter)
+            else: # just clear the table if there are no classes selected
+                self.stack_widget.setCurrentIndex(2)
 
     def closeEvent(self, event):
+        '''On close, save size and position of the window and exit daemon if necessary'''
         self.settings.endGroup()
-        
+
         self.settings.beginGroup("main_window")
         self.settings.setValue("size", self.size())
         self.settings.setValue("pos", self.pos())
@@ -323,7 +330,6 @@ class MainWindow(QMainWindow):
 
         if self.exit_on_close:
             phoenix.daemon_exit()
-            print('close on exit')
         event.accept()
 
 if __name__ == "__main__":
