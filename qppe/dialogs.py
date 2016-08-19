@@ -15,13 +15,16 @@ from qppe.widgets import TimeSpinBox
 
 class SettingsDlg(QDialog):
     """Dialog for manipulating settings for display and PPE settings"""
-    CUTOFFS = (1, 60, 60*60, 60*60*24) 
-    INTERVAL = 0x01
-    AUTOTRY = 0x02
-    HANDLE = 0x04
-    EMAIL = 0x08
-    CONTINUE = 0x10
-    ACCOUNTS = 0x20
+    INTERVAL =  0x0001
+    AUTOTRY =   0x0002
+    HANDLE =    0x0004
+    EMAIL =     0x0008
+    CONTINUE =  0x0010
+    ACCOUNTS =  0x0020
+    STATE =     0x0040
+    SIZE =      0x0080
+    POS =       0x0100
+    SPLITTERS = 0x0200
 
     # lambda for whether a setting is actually a string and true (happens automatically with QSettings)
     str_bool = lambda val: bool(val) and (not isinstance(val, str) or (isinstance(val, str) and val != 'false'))
@@ -29,8 +32,8 @@ class SettingsDlg(QDialog):
     def __init__(self, parent=None):
         super(SettingsDlg, self).__init__(parent)
         self.setWindowTitle("Settings")
-        grid = QGridLayout()
-        self.setLayout(grid)
+        overall_layout = QVBoxLayout()
+        self.setLayout(overall_layout)
 
         # get relevant data to populate settings panel
         data = shelve.open('/etc/ppe/data')
@@ -45,56 +48,39 @@ class SettingsDlg(QDialog):
         self.settings = QSettings("Scott Stewart", "qPPE")
         self.settings.beginGroup("Settings Dialog")
 
+        # make tabwidget divided between general and view settings
+        tab_widget = QTabWidget()
+        overall_layout.addWidget(tab_widget)
+        general_widget = QWidget()
+        view_widget = QWidget()
+        general_layout = QGridLayout()
+        general_widget.setLayout(general_layout)
+        view_layout = QGridLayout()
+        view_widget.setLayout(view_layout)
+        tab_widget.addTab(general_widget, "&General")
+        tab_widget.addTab(view_widget, "&View")
+
         # check interval is combo/spinbox for type (sec, min) and number of sec/mins, keeping the two consistent and updated w/ a variable for secs
         interval_label = QLabel("&Check interval:")
         self.interval = TimeSpinBox(self, interval)
         interval_label.setBuddy(self.interval)
-        grid.addWidget(interval_label, 0, 0)
-        grid.addWidget(self.interval, 0, 1)
+        general_layout.addWidget(interval_label, 0, 0)
+        general_layout.addWidget(self.interval, 0, 1)
     
         # do autotry the same as check interval
         autotry_label = QLabel("&Autotry interval:")
         self.autotry = TimeSpinBox(self, autotry)
         autotry_label.setBuddy(self.autotry)
-        grid.addWidget(autotry_label, 1, 0)
-        grid.addWidget(self.autotry, 1, 1)
-
-        # checkbox on whether to keep account selection visible on main window
-        self.view_accounts = QCheckBox("&Show account choices?")
-        view_setting = self.settings.value('view_accounts')
-        if view_setting is not None:
-            # on initial opening, boolean settings are actually lowercase string equivalents
-            self.view_accounts.setCheckState(SettingsDlg.str_bool(view_setting))
-        else:
-            self.view_accounts.setCheckState(True)
-            self.settings.setValue('view_accounts', True)
-        self.view_accounts.setTristate(False)
-        grid.addWidget(self.view_accounts, 2, 0, 1, 2)
+        general_layout.addWidget(autotry_label, 1, 0)
+        general_layout.addWidget(self.autotry, 1, 1)
 
         # checkbox on whether to check email, uses setting if available,controls visibility of subsequent settings
-        self.handle_ppe = QCheckBox("Automatically &handle scheduling checks?")
-        handle_setting = self.settings.value('handle_ppe')
-        if handle_setting is not None:
-            self.handle_ppe.setCheckState(SettingsDlg.str_bool(handle_setting))
-        self.handle_ppe.setTristate(False)
-        grid.addWidget(self.handle_ppe, 3, 0, 1, 2)
+        self.handle_ppe = self.constructCheckBox("Automatically &handle scheduling checks?", "handle_ppe", True)
+        general_layout.addWidget(self.handle_ppe, 2, 0, 1, 2)
 
         # checkbox on whether to send emails if PPE is being handled by the app or should be closed on exit, usability dependent on handle_ppe
-        self.send_emails = QCheckBox("&Send email notifiations?")
-        self.send_emails.setEnabled(self.handle_ppe.checkState())
-        email_setting = self.settings.value('send_emails')
-        if email_setting is not None:
-            self.send_emails.setCheckState(SettingsDlg.str_bool(email_setting))
-        self.send_emails.setTristate(False)
-        self.handle_ppe.stateChanged.connect(lambda: self.send_emails.setEnabled(self.handle_ppe.checkState()))
-
-        self.continue_running = QCheckBox("&Continue running PPE after close?")
-        self.continue_running.setEnabled(self.handle_ppe.checkState())
-        continue_setting = self.settings.value('continue_running')
-        if continue_setting is not None:
-            self.continue_running.setCheckState(SettingsDlg.str_bool(continue_setting))
-        self.continue_running.setTristate(False)
-        self.handle_ppe.stateChanged.connect(lambda: self.continue_running.setEnabled(self.handle_ppe.checkState()))
+        self.send_emails = self.constructCheckBox("&Send email notifiations?", "send_emails", False)
+        self.continue_running = self.constructCheckBox("Continue &running PPE after close?", "continue_running", True)
         
         # frame holding options dependent on handling
         handle_widgets = QFrame()
@@ -103,17 +89,51 @@ class SettingsDlg(QDialog):
         handle_widgets.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
         handle_layout.addWidget(self.send_emails)
         handle_layout.addWidget(self.continue_running)
-        grid.addWidget(handle_widgets, 4, 0, 2, 2)
+        self.handle_ppe.stateChanged.connect(lambda state: handle_widgets.setCheckState(state))
+        general_layout.addWidget(handle_widgets, 3, 0, 2, 2)
 
+        # checkbox on whether to keep account selection visible on main window
+        self.view_accounts = self.constructCheckBox("&Show account choices?", "view_accounts", True)
+        view_layout.addWidget(self.view_accounts, 0, 0)
+        
+        # checkbox on whether to save application state
+        self.save_state = self.constructCheckBox("Save &application state?", "save_state", True)
+        view_layout.addWidget(self.save_state, 1, 0)
+
+        # checkboxes on whther to save size, powition, splitters, etc, contingent on save_state
+        self.save_size = self.constructCheckBox("Save &window size?", "save_size", True)
+        self.save_pos = self.constructCheckBox("Save window &position?", "save_pos", True)
+        self.save_splitters = self.constructCheckBox("Save window &geometry?", "save_splitters", False)
+
+        # frame holding options dependent on handling
+        state_widgets = QFrame()
+        state_layout = QVBoxLayout()
+        state_widgets.setLayout(state_layout)
+        state_widgets.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        state_layout.addWidget(self.save_size)
+        state_layout.addWidget(self.save_pos)
+        state_layout.addWidget(self.save_splitters)
+        self.save_state.stateChanged.connect(lambda state: state_widgets.setEnabled(state))
+        view_layout.addWidget(state_widgets, 2, 0, 3, 1)
+
+        view_layout.setRowStretch(5, 1)
         # ok/cancel buttons on custom accept
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        grid.addWidget(buttons, 6, 0, 1, 2)
-
-        # set fixed size (for expansion dialog)
-        grid.setSizeConstraint(QLayout.SetFixedSize)
+        overall_layout.addWidget(buttons)
     
+    def constructCheckBox(self, text, setting_text, default):
+        box = QCheckBox(text)
+        setting = self.settings.value(setting_text)
+        if setting is not None:
+            box.setCheckState(SettingsDlg.str_bool(setting))
+        else:
+            box.setCheckState(default)
+            self.settings.setValue(setting_text, default)
+        box.setTristate(False)
+        return box
+
     def accept(self):
         '''Updates a bitmask for changes since the beginning of the dialog and closes the dialog'''
         self.changes = 0
@@ -139,6 +159,18 @@ class SettingsDlg(QDialog):
         if self.view_accounts.isChecked() != SettingsDlg.str_bool(self.settings.value('view_accounts')):
             self.settings.setValue('view_accounts', self.view_accounts.isChecked())
             self.changes |= self.ACCOUNTS
+        if self.save_state.isChecked() != SettingsDlg.str_bool(self.settings.value('save_state')):
+            self.settings.setValue('save_state', self.save_state.isChecked())
+            self.changes |= self.STATE
+        if self.save_size.isChecked() != SettingsDlg.str_bool(self.settings.value('save_size')):
+            self.settings.setValue('save_size', self.save_size.isChecked())
+            self.changes |= self.SIZE
+        if self.save_pos.isChecked() != SettingsDlg.str_bool(self.settings.value('save_pos')):
+            self.settings.setValue('save_pos', self.save_pos.isChecked())
+            self.changes |= self.POS
+        if self.save_splitters.isChecked() != SettingsDlg.str_bool(self.settings.value('save_splitters')):
+            self.settings.setValue('save_splitters', self.save_splitters.isChecked())
+            self.changes |= self.SPLITTERS
         self.settings.sync()
         self.settings.endGroup()
 

@@ -32,12 +32,19 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("StudentVue")
 
+        # get settings, with a default none on splitter states
+        main_splitter_state = selection_splitter_state = None
         self.settings = QSettings('Scott Stewart', 'qPPE')
-        self.settings.beginGroup('main_window')
-        self.resize(self.settings.value("size", QSize(960, 540)))
-        if self.settings.value("pos"):
-            self.move(self.settings.value("pos"))
-        self.settings.endGroup()
+        if self.settings.value("Settings Dialog/save_state", True):
+            if SettingsDlg.str_bool(self.settings.value('Settings Dialog/save_size')): # str_bool is necessary because of anamolies
+                self.resize(self.settings.value("main_window/size", QSize(960, 540)))
+            else:
+                self.resize(QSize(960, 540))
+            if SettingsDlg.str_bool(self.settings.value('Settings Dialog/save_pos')) and self.settings.value("main_window/pos"):
+                self.move(self.settings.value("main_window/pos"))
+            if SettingsDlg.str_bool(self.settings.value('Settings Dialog/save_splitters')) and self.settings.value('main_window/main_splitter'):
+                main_splitter_state = self.settings.value('main_window/main_splitter')
+                selection_splitter_state = self.settings.value('main_window/selection_splitter')
 
         self.settings.beginGroup('Settings Dialog')   
         handle = SettingsDlg.str_bool(self.settings.value('handle_ppe'))
@@ -89,18 +96,24 @@ class MainWindow(QMainWindow):
         self.class_list.itemPressed.connect(self.updateui)
         
         # create splitter between lists of acocunts and classes, making classes larger (2:1) 
-        selection_splitter = QSplitter(Qt.Vertical)
-        selection_splitter.addWidget(self.account_list)
-        selection_splitter.addWidget(self.class_list)
-        selection_splitter.setStretchFactor(0,1)
-        selection_splitter.setStretchFactor(1,2)
+        self.selection_splitter = QSplitter(Qt.Vertical)
+        self.selection_splitter.addWidget(self.account_list)
+        self.selection_splitter.addWidget(self.class_list)
+        if selection_splitter_state:
+            self.selection_splitter.restoreState(selection_splitter_state)
+        else:
+            self.selection_splitter.setStretchFactor(0,1)
+            self.selection_splitter.setStretchFactor(1,2)
 
         # create splitter betweem class/accounts and the middle part (overview/quarter tabs) (1:3)
         self.main_splitter = QSplitter(Qt.Horizontal)
-        self.main_splitter.addWidget(selection_splitter)
+        self.main_splitter.addWidget(self.selection_splitter)
         self.main_splitter.addWidget(self.stack_widget)
-        self.main_splitter.setStretchFactor(0,2)
-        self.main_splitter.setStretchFactor(1,5)
+        if main_splitter_state:
+            self.main_splitter.restoreState(main_splitter_state)
+        else:
+            self.main_splitter.setStretchFactor(0,2)
+            self.main_splitter.setStretchFactor(1,5)
         self.setCentralWidget(self.main_splitter)
         self.quarter_tabs.currentChanged.connect(self.updateui)
 
@@ -222,7 +235,7 @@ class MainWindow(QMainWindow):
         '''Show settings dialog and lock in any changed settings'''
         dlg = SettingsDlg(self)
         if dlg.exec_() and dlg.changes:
-            self.status_bar.showMessage("Settings updated ({:02x}).".format(dlg.changes), 5000)
+            self.status_bar.showMessage("Settings updated ({:04x}).".format(dlg.changes), 5000)
             if dlg.changes & SettingsDlg.ACCOUNTS:
                 self.account_list.setVisible(dlg.view_accounts.checkState())
             self.settings.sync()
@@ -350,6 +363,8 @@ class MainWindow(QMainWindow):
         self.settings.beginGroup("main_window")
         self.settings.setValue("size", self.size())
         self.settings.setValue("pos", self.pos())
+        self.settings.setValue("main_splitter", self.main_splitter.saveState())
+        self.settings.setValue("selection_splitter", self.selection_splitter.saveState())
         self.settings.endGroup()
 
         if self.exit_on_close:
