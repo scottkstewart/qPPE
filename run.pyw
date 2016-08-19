@@ -81,6 +81,8 @@ class MainWindow(QMainWindow):
         self.account_list.itemSelectionChanged.connect(lambda: self.updateui(populate_accounts=False))
         self.account_list.setSortingEnabled(True)
         self.account_list.setVisible(SettingsDlg.str_bool(self.settings.value('view_accounts', True)))
+        self.account_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.account_list.customContextMenuRequested.connect(self.accountListMenu)
         self.class_list = QListWidget()
         self.class_list.setAlternatingRowColors(True)
         self.class_list.itemSelectionChanged.connect(lambda: self.updateui(False, False))
@@ -130,10 +132,10 @@ class MainWindow(QMainWindow):
         self.edit_actions = (add_action, edit_action, select_action, remove_action)
 
         # create file and edit menus populated with previous actions, as well as a central context menu
-        file_menu = self.menuBar().addMenu("&File")    
-        file_menu.addActions(self.file_actions)
-        edit_menu = self.menuBar().addMenu("&Accounts")    
-        edit_menu.addActions(self.edit_actions)
+        self.file_menu = self.menuBar().addMenu("&File")    
+        self.file_menu.addActions(self.file_actions)
+        self.edit_menu = self.menuBar().addMenu("&Accounts")    
+        self.edit_menu.addActions(self.edit_actions)
         
         self.setContextMenuPolicy(Qt.ActionsContextMenu)
         self.addActions(self.file_actions)
@@ -197,6 +199,25 @@ class MainWindow(QMainWindow):
         table.setMaximumWidth(402)
         return table
 
+    def accountListMenu(self, pos):
+        '''Custom context menu handler for accountList widget'''
+        overall_menu = QMenu(self)
+        username = self.account_list.currentItem().text()
+        hide_action = QAction("&Hide this widget", self)
+        hide_action.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMinButton))
+        hide_action.triggered.connect(lambda: self.account_list.setVisible(False))
+        hide_action.triggered.connect(lambda: self.settings.setValue('view_accounts', False))
+        edit_action = QAction("&Edit account {}".format(username), self)
+        edit_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        edit_action.triggered.connect(lambda: self.editAccount(username))
+        remove_action = QAction("&Remove account {}".format(username), self)
+        remove_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogEnd))
+        remove_action.triggered.connect(lambda: self.removeAccount(username))    
+        overall_menu.addActions((hide_action, edit_action, remove_action, self.separator))
+        overall_menu.addMenu(self.file_menu)
+        overall_menu.addMenu(self.edit_menu)
+        overall_menu.popup(self.account_list.viewport().mapToGlobal(pos))
+
     def getSettings(self):
         '''Show settings dialog and lock in any changed settings'''
         dlg = SettingsDlg(self)
@@ -213,10 +234,12 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage('Account {} added.'.format(dlg.username.text()), 5000)         
             self.updateui()
     
-    def editAccount(self):
+    def editAccount(self, username=None):
         '''Show dialog to edit the current account, giving a 5s message on the status bar when applied'''
+        if username is None:
+            username = self.account_list.currentItem().text()
         data = shelve.open('/etc/ppe/data') 
-        dlg = EditDlg(self, data['accounts'][self.account_list.currentItem().text()])
+        dlg = EditDlg(self, data['accounts'][username])
         data.close()
         if dlg.exec_():
             self.status_bar.showMessage(dlg.edits, 5000)
@@ -228,9 +251,10 @@ class MainWindow(QMainWindow):
         if dlg.exec_():
             self.status_bar.showMessage('Account {} selected.'.format(dlg.account_box.currentText()), 5000)
 
-    def removeAccount(self):
+    def removeAccount(self, username=None):
         '''Confirm the user wants to delete the current account, then delete it.'''
-        username = self.account_list.currentItem().text()
+        if username is None:
+            username = self.account_list.currentItem().text()
         if QMessageBox.question(self,
                                 'Remove Account',
                                 'Are you sure you want to remove account {}?'.format(username),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import re
-from PyQt5.QtWidgets import QSpinBox
+from PyQt5.QtWidgets import QSpinBox, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt, QRegExp
 from PyQt5.QtGui import QRegExpValidator
 class TimeSpinBox(QSpinBox):
