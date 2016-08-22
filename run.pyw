@@ -11,21 +11,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer, QSettings, QSize
 from ppeMod import PhoenixClass, PhoenixChecker
 from qppe.dialogs import SelectDlg, SettingsDlg, AddDlg, EditDlg
-
-class TestPC(PhoenixChecker):
-    """Stub-filled class for testing during the summer"""
-    def updatePage(self):
-        pass
-    def update(self):
-        pass
-    def urlUpdatae(self):
-        pass
-    def __init__(self, user, password, email, classes=PhoenixClass(None, 'Default')):    
-        self.classes = [cl for cl in classes]
-        self.username=user
-        self.password='password'
-        self.email='filler@email.com'
-
 class MainWindow(QMainWindow):
     """Class to display current status of LCPS' StudentVue"""
     def __init__(self, parent=None):
@@ -135,7 +120,7 @@ class MainWindow(QMainWindow):
         add_action.triggered.connect(self.addAccount)
         edit_action = QAction("&Edit current account", self)
         edit_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        edit_action.triggered.connect(self.editAccount)
+        edit_action.triggered.connect(lambda: self.editAccount(username=None))          # w/o lambda this passed unwanted arg.
         select_action = QAction("Se&lect Account", self)
         select_action.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxQuestion))
         select_action.triggered.connect(self.selectAccount)
@@ -165,28 +150,19 @@ class MainWindow(QMainWindow):
    
         # get data from PPE database 
         data = shelve.open('/etc/ppe/data')
-        self.accounts = data['accounts']
-        data.close()
-
-        # placeholder data for testing during summer
-        nl = ('AP Economics', 'AP Statistics', 'AP Government', 'AP Physics C: Mechanics', 'English 12 DE', 'Independent Science Research', 'Geospacial Science DE')
-        for i in range(0,10):
-            self.accounts['{:06d}'.format(i*111111)] = TestPC('{:06d}'.format(i*111111), 'password', 'test@email.com', (PhoenixClass(None, '({}) {}'.format(i, a)) for a in nl))
-            self.accounts['{:06d}'.format(i*111111)].currentQuarter = 3            
-
-        for account in self.accounts.values():
-            for pClass in account.classes:
-                pClass.setAssignments([[('({} Q{}) Assignment #{}.'.format(pClass.getName(), j+1, i+1), 'G ({}/100)'.format(100-i)) for i in range(15)] for j in range(4)])
-                pClass.setNumerator([1395, 1395, 1395, 1395])
-                pClass.setDenominator([1500,1500,1500,1500])
-                pClass.grade = ['A (93)', 'A (93)', 'A (93)', 'A (93)']
-
-        data = shelve.open('/etc/ppe/data')
-        data['accounts'] = self.accounts
+        try:
+            self.accounts = data['accounts']
+        except KeyError:
+            self.accounts = data['accounts'] = {}
         data.close()
 
         # set the tab index to the current quarter (updates ui)
-        self.quarter_tabs.setCurrentIndex(list(self.accounts.values())[0].currentQuarter-1)
+        if self.accounts:
+            self.quarter_tabs.setCurrentIndex(list(self.accounts.values())[0].currentQuarter-1)
+            if not list(self.accounts.values())[0].currentQuarter-1:
+                self.updateui()
+        else:
+            self.updateui()
 
         if handle:
             os.system('phoenix start -n')   # fix later
@@ -215,7 +191,7 @@ class MainWindow(QMainWindow):
     def accountListMenu(self, pos):
         '''Custom context menu handler for accountList widget'''
         overall_menu = QMenu(self)
-        username = self.account_list.currentItem().text()
+        username = self.account_list.currentItem().text() if self.account_list.count() else ''
         hide_action = QAction("&Hide this widget", self)
         hide_action.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMinButton))
         hide_action.triggered.connect(lambda: self.account_list.setVisible(False))
@@ -249,7 +225,10 @@ class MainWindow(QMainWindow):
     
     def editAccount(self, username=None):
         '''Show dialog to edit the current account, giving a 5s message on the status bar when applied'''
-        if username is None:
+        if not self.account_list.count():
+            QMessageBox.warning(self, "No account to edit", 'WARNING: There is no account to edit. Run again with accounts logged.')
+            return
+        elif username is None:
             username = self.account_list.currentItem().text()
         data = shelve.open('/etc/ppe/data') 
         dlg = EditDlg(self, data['accounts'][username])
@@ -261,12 +240,18 @@ class MainWindow(QMainWindow):
     def selectAccount(self):
         '''Show dialog to select an account from the list'''
         dlg = SelectDlg(self, self.account_list)
+        if not self.account_list.count():
+            QMessageBox.warning(self, "No account to select", 'WARNING: There is no account to select. Run again with accounts logged.')
+            return
         if dlg.exec_():
             self.status_bar.showMessage('Account {} selected.'.format(dlg.account_box.currentText()), 5000)
 
     def removeAccount(self, username=None):
         '''Confirm the user wants to delete the current account, then delete it.'''
-        if username is None:
+        if not self.account_list.count():
+            QMessageBox.warning(self, "No account to remove", 'WARNING: There is no account to remove. Run again with accounts logged.')
+            return
+        elif username is None:
             username = self.account_list.currentItem().text()
         if QMessageBox.question(self,
                                 'Remove Account',
@@ -309,7 +294,7 @@ class MainWindow(QMainWindow):
                 self.class_list.setCurrentRow(ind)
         
             # populate main widget
-            if self.class_list.currentItem() is not None:
+            if self.class_list.currentItem() is not None and ind >= 0:
                 # if "OVERVIEW" is selected
                 if ind > 0:
                     # set stackedwidget to the tab widget, get the class, and populate the totals table
@@ -319,7 +304,10 @@ class MainWindow(QMainWindow):
                     totals_table = self.class_totals[ind]
                     totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
                     totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
-                    totals_table.setItem(0, 2, QTableWidgetItem('{:0.1f}%'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100)))
+                    if cl.getDenominator()[ind]:
+                        totals_table.setItem(0, 2, QTableWidgetItem('{:0.1f}%'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100)))
+                    else:
+                        totals_table.setItem(0, 2, QTableWidgetItem())
                     totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
                     for i in range(4): 
                         totals_table.item(0,i).setFlags(Qt.ItemIsEnabled) # no select or edit flags

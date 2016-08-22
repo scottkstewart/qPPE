@@ -87,9 +87,10 @@ class SettingsDlg(QDialog):
         handle_layout = QVBoxLayout()
         handle_widgets.setLayout(handle_layout)
         handle_widgets.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        handle_widgets.setEnabled(self.handle_ppe.checkState())
         handle_layout.addWidget(self.send_emails)
         handle_layout.addWidget(self.continue_running)
-        self.handle_ppe.stateChanged.connect(lambda state: handle_widgets.setCheckState(state))
+        self.handle_ppe.stateChanged.connect(lambda state: handle_widgets.setEnabled(state))
         general_layout.addWidget(handle_widgets, 3, 0, 2, 2)
 
         # checkbox on whether to keep account selection visible on main window
@@ -110,6 +111,7 @@ class SettingsDlg(QDialog):
         state_layout = QVBoxLayout()
         state_widgets.setLayout(state_layout)
         state_widgets.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+        state_widgets.setEnabled(self.save_state.checkState())
         state_layout.addWidget(self.save_size)
         state_layout.addWidget(self.save_pos)
         state_layout.addWidget(self.save_splitters)
@@ -233,13 +235,14 @@ class AddDlg(AccountDlg):
     def accept(self):
         '''Validates and logs the bots, closing the dialog if successful but displaying an error and allowing retries if
            unsuccessful'''    
+        sys.setrecursionlimit(10000)
         username = self.username.text()
         try:
             bot = PhoenixChecker(username, self.password.text(), self.email.text())
         except IndexError:                      # index error is typical of an incorrect password in PPE
             self.error_label.setVisible(True)
         else:
-            data = shelve.open('/etc/ppe/data')
+            data = shelve.open('/etc/ppe/data', writeback=True)
             # open messagebox to double check overwrite if the bot already exists
             if not username in data['accounts'].keys() or QMessageBox.question(self,
                                                                 "Overwrite?", 

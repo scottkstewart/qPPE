@@ -1,5 +1,5 @@
 # qPPE
 
-(Everything on this program is poorly tested, don't expect it to function until a few weeks into the school year)
+(Functionality is still a bit shaky -- daemon handling is broken and everything is still poorly tested, but it kinda works)
 
-GUI Extension of Phoenix-parse-email based on QT -- meant to remove any interaction with studentvue
+GUI Extension of Phoenix-parse-email based on PyQt -- meant to remove any interaction with studentvue
