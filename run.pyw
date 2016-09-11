@@ -265,6 +265,9 @@ class MainWindow(QMainWindow):
             phoenix.log('[{}] Account {} deleted.'.format(str(datetime.datetime.now()), username))
             self.updateui()
 
+    GRADE_MINIMUMS = [('A+', 97.5), ('A', 92.5), ('A-', 89.5), ('B+', 86.5), ('B', 82.5), ('B-', 79.5), ('C+', 76.5),
+                      ('C', 72.5), ('C-', 69.5), ('D+', 66.5), ('D', 62.5), ('D-', 59.5), ('F', 0)]
+
     def updateui(self, populate_accounts=True, populate_classes=True):
         '''Updates the ui on state changes, potentially without accountlist population to avoid recursion'''
         # sync accounts with database
@@ -318,12 +321,23 @@ class MainWindow(QMainWindow):
                     table = self.grade_tables[ind]
                     table.setRowCount(len(assignmentList))
                     for row, assignment in enumerate(assignmentList):
-                        grade, num, denom = re.split("[/()]",assignment[1])[:3]
+                        num, denom = re.split("[/()]",assignment[1])[1:3]
                         table.setItem(row, 0, QTableWidgetItem(assignment[0]))
                         table.setItem(row, 1, QTableWidgetItem(num))
                         table.setItem(row, 2, QTableWidgetItem(denom))
-                        table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(int(num)/int(denom)*100)))
-                        table.setItem(row, 4, QTableWidgetItem(grade[:-1]))
+                        if float(denom):
+                            percentage = float(num)/float(denom)*100
+                            table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(percentage)))
+                        else:
+                            percentage = None
+                            table.setItem(row, 3, QTableWidgetItem())
+                        if percentage is not None:
+                            for grade in self.GRADE_MINIMUMS:
+                                if percentage > grade[1]:
+                                    table.setItem(row, 4, QTableWidgetItem(grade[0]))
+                                    break
+                        else:
+                            table.setItem(row, 4, QTableWidgetItem('N/A'))
                         table.item(row, 0).setFlags(Qt.ItemIsEnabled) # no select or edit flags
                         for i in range(1, 5):
                             table.item(row, i).setFlags(Qt.ItemIsEnabled)

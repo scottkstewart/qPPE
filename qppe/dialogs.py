@@ -258,7 +258,7 @@ class EditDlg(AccountDlg):
     """Dialog for editing accounts to be displayed (mostly email since password changes are problematic)"""
     def __init__(self, parent=None, account=None):
         self.account = account
-        
+
         # Fill hole in super's grid with labels
         super(EditDlg, self).__init__(parent, "Edit Account")
         username_title = QLabel("Username: ")
@@ -271,6 +271,7 @@ class EditDlg(AccountDlg):
 
     def accept(self):
         '''Adds changes to bot if there are any, validating changed passwords'''
+        sys.setrecursionlimit(10000)
         username = self.account.username
         email = self.account.email
         if self.password.text() != self.account.password:
@@ -281,17 +282,18 @@ class EditDlg(AccountDlg):
             else:
                 # if the password is changed successfully, log edit (email if changed) and accept
                 self.edits = "{}'s password {}changed.".format(username, '' if self.email.text() == email else 'and email ')
-                data=shelve.open('/etc/ppe/data')
+                data=shelve.open('/etc/ppe/data', writeback=True)
                 data['accounts'][username] = bot
                 data.close()
                 phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
                 QDialog.accept(self)
         elif self.email.text() != email:
             # if only email is changed, validate, log, and accept
-            self.account.email = email
+            self.account.email = self.email.text()
             self.edits = "{}'s email changed".format(username)
-            data=shelve.open('/etc/ppe/data')
-            data['accounts'][username] = self.account
+            data=shelve.open('/etc/ppe/data', writeback=True)
+            print(username)
+            data['accounts'][username].email = self.email.text()
             data.close()
             phoenix.log('[{}] {}'.format(str(datetime.datetime.now()), self.edits))
             QDialog.accept(self)
