@@ -10,7 +10,7 @@ import signal
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer, QSettings, QRegExp
 from PyQt5.QtGui import QRegExpValidator
-from ppeMod import PhoenixClass, PhoenixChecker
+from ppe import PhoenixClass, PhoenixChecker
 from qppe.widgets import TimeSpinBox
 
 class SettingsDlg(QDialog):

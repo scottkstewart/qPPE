@@ -9,7 +9,7 @@ import datetime
 import signal
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer, QSettings, QSize
-from ppeMod import PhoenixClass, PhoenixChecker
+from ppe import PhoenixClass, PhoenixChecker
 from qppe.dialogs import SelectDlg, SettingsDlg, AddDlg, EditDlg
 class MainWindow(QMainWindow):
     """Class to display current status of LCPS' StudentVue"""

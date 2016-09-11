@@ -6,6 +6,6 @@ setup(name='qPPE',
       author='Scott Stewart',
       url='https://github.com/scottkstewart/qPPE',
       author_email='scottkstewart16@gmail.com',
-      requires=['pyqt5', 'ppeMod', 'phoenix'],
+      requires=['pyqt5', 'ppe', 'phoenix'],
       packages=['qppe'])
 os.system('cp run.pyw /usr/bin/qPPE')
