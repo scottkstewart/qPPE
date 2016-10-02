@@ -25,6 +25,7 @@ class SettingsDlg(QDialog):
     SIZE =      0x0080
     POS =       0x0100
     SPLITTERS = 0x0200
+    EMPTY =     0x0400
 
     # lambda for whether a setting is actually a string and true (happens automatically with QSettings)
     str_bool = lambda val: bool(val) and (not isinstance(val, str) or (isinstance(val, str) and val != 'false'))
@@ -97,9 +98,13 @@ class SettingsDlg(QDialog):
         self.view_accounts = self.constructCheckBox("&Show account choices?", "view_accounts", True)
         view_layout.addWidget(self.view_accounts, 0, 0)
         
+        # checkbox on whether to show empty grades
+        self.show_empty = self.constructCheckBox("Show &empty grades?", "show_empty", False)
+        view_layout.addWidget(self.show_empty, 1, 0)
+
         # checkbox on whether to save application state
         self.save_state = self.constructCheckBox("Save &application state?", "save_state", True)
-        view_layout.addWidget(self.save_state, 1, 0)
+        view_layout.addWidget(self.save_state, 2, 0)
 
         # checkboxes on whther to save size, powition, splitters, etc, contingent on save_state
         self.save_size = self.constructCheckBox("Save &window size?", "save_size", True)
@@ -116,7 +121,8 @@ class SettingsDlg(QDialog):
         state_layout.addWidget(self.save_pos)
         state_layout.addWidget(self.save_splitters)
         self.save_state.stateChanged.connect(lambda state: state_widgets.setEnabled(state))
-        view_layout.addWidget(state_widgets, 2, 0, 3, 1)
+        view_layout.addWidget(state_widgets, 3, 0, 3, 1)
+        
 
         view_layout.setRowStretch(5, 1)
         # ok/cancel buttons on custom accept
@@ -173,6 +179,9 @@ class SettingsDlg(QDialog):
         if self.save_splitters.isChecked() != SettingsDlg.str_bool(self.settings.value('save_splitters')):
             self.settings.setValue('save_splitters', self.save_splitters.isChecked())
             self.changes |= self.SPLITTERS
+        if self.show_empty.isChecked() != SettingsDlg.str_bool(self.settings.value('show_empty')):
+            self.settings.setValue('show_empty', self.show_empty.isChecked())
+            self.changes |= self.EMPTY
         self.settings.sync()
         self.settings.endGroup()
 

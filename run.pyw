@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
 
         # create stack widget to switch between tabs, overview, and label for no classes
         self.stack_widget = QStackedWidget()
-        self.overview_table = self.gradetable(header=('Class', 'Q1', 'Q2', 'Q3', 'Q4'))
+        self.overview_table = self.gradetable(header=('Class', 'Q1', 'Q2', 'S1', 'Q3', 'Q4', 'S2', 'FG'))
         self.overview_table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.stack_widget.addWidget(self.overview_table)
         self.stack_widget.addWidget(self.quarter_tabs)
@@ -298,7 +298,7 @@ class MainWindow(QMainWindow):
         
             # populate main widget
             if self.class_list.currentItem() is not None and ind >= 0:
-                # if "OVERVIEW" is selected
+                # if a class is selected
                 if ind > 0:
                     # set stackedwidget to the tab widget, get the class, and populate the totals table
                     self.stack_widget.setCurrentIndex(1)
@@ -320,17 +320,20 @@ class MainWindow(QMainWindow):
                     assignmentList = cl.getAssignments()[ind]
                     table = self.grade_tables[ind]
                     table.setRowCount(len(assignmentList))
-                    for row, assignment in enumerate(assignmentList):
+                    row = 0
+                    for assignment in assignmentList:
                         num, denom = re.split("[/()]",assignment[1])[1:3]
-                        table.setItem(row, 0, QTableWidgetItem(assignment[0]))
-                        table.setItem(row, 1, QTableWidgetItem(num))
-                        table.setItem(row, 2, QTableWidgetItem(denom))
                         if float(denom):
                             percentage = float(num)/float(denom)*100
                             table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(percentage)))
                         else:
+                            if not SettingsDlg.str_bool(self.settings.value('show_empty')):
+                                continue
                             percentage = None
                             table.setItem(row, 3, QTableWidgetItem())
+                        table.setItem(row, 0, QTableWidgetItem(assignment[0]))
+                        table.setItem(row, 1, QTableWidgetItem(num))
+                        table.setItem(row, 2, QTableWidgetItem(denom))
                         if percentage is not None:
                             for grade in self.GRADE_MINIMUMS:
                                 if percentage > grade[1]:
@@ -342,8 +345,10 @@ class MainWindow(QMainWindow):
                         for i in range(1, 5):
                             table.item(row, i).setFlags(Qt.ItemIsEnabled)
                             table.item(row, i).setTextAlignment(Qt.AlignCenter)
+                        row += 1
+                    table.setRowCount(row)
 
-                else: #if a class is selected
+                else: #if 'OVERVIEW' is selected
                     # set stackedwidget to the overview widget, get classes, and populate with a per-quarter overview of each class
                     self.stack_widget.setCurrentIndex(0)
                     classes = self.accounts[self.account_list.currentItem().text()].classes
@@ -351,10 +356,18 @@ class MainWindow(QMainWindow):
                     for row, cl in enumerate(classes):
                         self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
                         self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
-                        for q in range(4):
-                            self.overview_table.setItem(row, q+1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[q], str(cl.getNumerator()[q]), str(cl.getDenominator()[q])))) 
+                        
+                        self.overview_table.setItem(row, 1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[0], str(cl.getNumerator()[0]), str(cl.getDenominator()[0])))) 
+                        self.overview_table.setItem(row, 2, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[1], str(cl.getNumerator()[1]), str(cl.getDenominator()[1]))))
+                        self.overview_table.setItem(row, 3, QTableWidgetItem(cl.getGrade()[4]))
+                        self.overview_table.setItem(row, 4, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[2], str(cl.getNumerator()[2]), str(cl.getDenominator()[2])))) 
+                        self.overview_table.setItem(row, 5, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[3], str(cl.getNumerator()[3]), str(cl.getDenominator()[3])))) 
+                        self.overview_table.setItem(row, 6, QTableWidgetItem(cl.getGrade()[5]))
+                        self.overview_table.setItem(row, 7, QTableWidgetItem(cl.getGrade()[6]))
+                        for q in range(7):
                             self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
                             self.overview_table.item(row, q+1).setTextAlignment(Qt.AlignCenter)
+                        
             else: # just clear the table if there are no classes selected
                 self.stack_widget.setCurrentIndex(2)
 
