@@ -4,6 +4,16 @@ import re
 from PyQt5.QtWidgets import QSpinBox, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt, QRegExp
 from PyQt5.QtGui import QRegExpValidator
+class PercentSpinBox(QSpinBox):
+    """Custom widget to collect a number of figures of precision in percentages"""
+    def __init__(self, parent=None, figures=1):
+        super(PercentSpinBox, self).__init__(parent)
+        self.setRange(0,6)
+        self.setValue(figures)
+
+    def textFromValue(self, value):
+        return '{0:.{1}f}%'.format(03.1415926536, value)
+
 class TimeSpinBox(QSpinBox):
     """Custom widget to collect an interval in time, used primarily in the settings dialog"""
     SUFFIXES = {'s': 1, 'm':60, 'h':60*60, 'd':60*60*24}

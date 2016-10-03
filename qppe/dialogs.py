@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer, QSettings, QRegExp
 from PyQt5.QtGui import QRegExpValidator
 from ppe import PhoenixClass, PhoenixChecker
-from qppe.widgets import TimeSpinBox
+from qppe.widgets import TimeSpinBox, PercentSpinBox
 
 class SettingsDlg(QDialog):
     """Dialog for manipulating settings for display and PPE settings"""
@@ -26,6 +26,7 @@ class SettingsDlg(QDialog):
     POS =       0x0100
     SPLITTERS = 0x0200
     EMPTY =     0x0400
+    DIGITS =    0x0800
 
     # lambda for whether a setting is actually a string and true (happens automatically with QSettings)
     str_bool = lambda val: bool(val) and (not isinstance(val, str) or (isinstance(val, str) and val != 'false'))
@@ -96,15 +97,22 @@ class SettingsDlg(QDialog):
 
         # checkbox on whether to keep account selection visible on main window
         self.view_accounts = self.constructCheckBox("&Show account choices?", "view_accounts", True)
-        view_layout.addWidget(self.view_accounts, 0, 0)
+        view_layout.addWidget(self.view_accounts, 0, 0, 1, 2)
         
         # checkbox on whether to show empty grades
         self.show_empty = self.constructCheckBox("Show &empty grades?", "show_empty", False)
-        view_layout.addWidget(self.show_empty, 1, 0)
+        view_layout.addWidget(self.show_empty, 1, 0, 1, 2)
 
         # checkbox on whether to save application state
         self.save_state = self.constructCheckBox("Save &application state?", "save_state", True)
-        view_layout.addWidget(self.save_state, 2, 0)
+        view_layout.addWidget(self.save_state, 2, 0, 1, 2)
+
+        # custom spinbox on the number of digits to display for percentages
+        digit_label = QLabel("P&recision of percentagess:")
+        self.digits = PercentSpinBox(self, int(self.settings.value('digits', 1)))
+        digit_label.setBuddy(self.digits)
+        view_layout.addWidget(digit_label, 3, 0)
+        view_layout.addWidget(self.digits, 3, 1)
 
         # checkboxes on whther to save size, powition, splitters, etc, contingent on save_state
         self.save_size = self.constructCheckBox("Save &window size?", "save_size", True)
@@ -121,8 +129,7 @@ class SettingsDlg(QDialog):
         state_layout.addWidget(self.save_pos)
         state_layout.addWidget(self.save_splitters)
         self.save_state.stateChanged.connect(lambda state: state_widgets.setEnabled(state))
-        view_layout.addWidget(state_widgets, 3, 0, 3, 1)
-        
+        view_layout.addWidget(state_widgets, 4, 0, 3, 2)
 
         view_layout.setRowStretch(5, 1)
         # ok/cancel buttons on custom accept
@@ -182,6 +189,9 @@ class SettingsDlg(QDialog):
         if self.show_empty.isChecked() != SettingsDlg.str_bool(self.settings.value('show_empty')):
             self.settings.setValue('show_empty', self.show_empty.isChecked())
             self.changes |= self.EMPTY
+        if self.digits.value() != self.settings.value('digits'):
+            self.settings.setValue('digits', self.digits.value())
+            self.changes |= self.DIGITS
         self.settings.sync()
         self.settings.endGroup()
 

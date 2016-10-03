@@ -214,6 +214,8 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Settings updated ({:04x}).".format(dlg.changes), 5000)
             if dlg.changes & SettingsDlg.ACCOUNTS:
                 self.account_list.setVisible(dlg.view_accounts.checkState())
+            if dlg.changes & (SettingsDlg.EMPTY | SettingsDlg.DIGITS):
+                self.updateui()
             self.settings.sync()
 
     def addAccount(self):
@@ -307,8 +309,12 @@ class MainWindow(QMainWindow):
                     totals_table = self.class_totals[ind]
                     totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
                     totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
+                    digits = int(self.settings.value('digits', 1))
                     if cl.getDenominator()[ind]:
-                        totals_table.setItem(0, 2, QTableWidgetItem('{:0.1f}%'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100)))
+                        text = '{0:.{1}f}'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100, digits)
+                        if digits:
+                            text = text.rstrip('0').rstrip('.')
+                        totals_table.setItem(0, 2, QTableWidgetItem(text + '%'))
                     else:
                         totals_table.setItem(0, 2, QTableWidgetItem())
                     totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
@@ -325,7 +331,10 @@ class MainWindow(QMainWindow):
                         num, denom = re.split("[/()]",assignment[1])[1:3]
                         if float(denom):
                             percentage = float(num)/float(denom)*100
-                            table.setItem(row, 3, QTableWidgetItem('{:0.1f}%'.format(percentage)))
+                            text = '{0:.{1}f}'.format(percentage, digits)
+                            if digits:
+                                text = text.rstrip('0').rstrip('.')
+                            table.setItem(row, 3, QTableWidgetItem(text + '%'))
                         else:
                             if not SettingsDlg.str_bool(self.settings.value('show_empty')):
                                 continue
