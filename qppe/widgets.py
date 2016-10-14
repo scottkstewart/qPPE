@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import re
+from math import pi
 from PyQt5.QtWidgets import QSpinBox, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt, QRegExp
 from PyQt5.QtGui import QRegExpValidator
@@ -12,7 +13,7 @@ class PercentSpinBox(QSpinBox):
         self.setValue(figures)
 
     def textFromValue(self, value):
-        return '{0:.{1}f}%'.format(03.1415926536, value)
+        return '{0:.{1}f}%'.format(pi, value)
 
 class TimeSpinBox(QSpinBox):
     """Custom widget to collect an interval in time, used primarily in the settings dialog"""

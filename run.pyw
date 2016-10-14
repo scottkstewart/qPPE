@@ -297,88 +297,88 @@ class MainWindow(QMainWindow):
                 self.class_list.item(0).setTextAlignment(Qt.AlignHCenter)
                 self.class_list.addItems((cl.getName() for cl in self.accounts[self.account_list.currentItem().text()].classes))
                 self.class_list.setCurrentRow(ind)
+        else: # just clear the table if there are no classes selected
+            self.stack_widget.setCurrentIndex(2)
         
-            # populate main widget
-            if self.class_list.currentItem() is not None and ind >= 0:
-                # if a class is selected
-                if ind > 0:
-                    # set stackedwidget to the tab widget, get the class, and populate the totals table
-                    self.stack_widget.setCurrentIndex(1)
-                    cl = self.accounts[self.account_list.currentItem().text()].classes[ind-1]
-                    ind = self.quarter_tabs.currentIndex()                
-                    totals_table = self.class_totals[ind]
-                    totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
-                    totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
-                    digits = int(self.settings.value('digits', 1))
-                    if cl.getDenominator()[ind]:
-                        text = '{0:.{1}f}'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100, digits)
+        # populate main widget
+        if self.class_list.currentItem() is not None and ind >= 0:
+            # if a class is selected
+            if ind > 0:
+                # set stackedwidget to the tab widget, get the class, and populate the totals table
+                self.stack_widget.setCurrentIndex(1)
+                cl = self.accounts[self.account_list.currentItem().text()].classes[ind-1]
+                ind = self.quarter_tabs.currentIndex()                
+                totals_table = self.class_totals[ind]
+                totals_table.setItem(0, 0, QTableWidgetItem(str(cl.getNumerator()[ind])))                
+                totals_table.setItem(0, 1, QTableWidgetItem(str(cl.getDenominator()[ind])))
+                digits = int(self.settings.value('digits', 1))
+                if cl.getDenominator()[ind]:
+                    text = '{0:.{1}f}'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100, digits)
+                    if digits:
+                        text = text.rstrip('0').rstrip('.')
+                    totals_table.setItem(0, 2, QTableWidgetItem(text + '%'))
+                else:
+                    totals_table.setItem(0, 2, QTableWidgetItem())
+                totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
+                for i in range(4): 
+                    totals_table.item(0,i).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                    totals_table.item(0,i).setTextAlignment(Qt.AlignCenter)
+
+                # get assignments and populate table of all assignments
+                assignmentList = cl.getAssignments()[ind]
+                table = self.grade_tables[ind]
+                table.setRowCount(len(assignmentList))
+                row = 0
+                for assignment in assignmentList:
+                    num, denom = re.split("[/()]",assignment[1])[1:3]
+                    if float(denom):
+                        percentage = float(num)/float(denom)*100
+                        text = '{0:.{1}f}'.format(percentage, digits)
                         if digits:
                             text = text.rstrip('0').rstrip('.')
-                        totals_table.setItem(0, 2, QTableWidgetItem(text + '%'))
+                        table.setItem(row, 3, QTableWidgetItem(text + '%'))
                     else:
-                        totals_table.setItem(0, 2, QTableWidgetItem())
-                    totals_table.setItem(0, 3, QTableWidgetItem(cl.getGrade()[ind].split(' ')[0]))
-                    for i in range(4): 
-                        totals_table.item(0,i).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                        totals_table.item(0,i).setTextAlignment(Qt.AlignCenter)
+                        if not SettingsDlg.str_bool(self.settings.value('show_empty')):
+                            continue
+                        percentage = None
+                        table.setItem(row, 3, QTableWidgetItem())
+                    table.setItem(row, 0, QTableWidgetItem(assignment[0]))
+                    table.setItem(row, 1, QTableWidgetItem(num))
+                    table.setItem(row, 2, QTableWidgetItem(denom))
+                    if percentage is not None:
+                        for grade in self.GRADE_MINIMUMS:
+                            if percentage > grade[1]:
+                                table.setItem(row, 4, QTableWidgetItem(grade[0]))
+                                break
+                    else:
+                        table.setItem(row, 4, QTableWidgetItem('N/A'))
+                    table.item(row, 0).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                    for i in range(1, 5):
+                        table.item(row, i).setFlags(Qt.ItemIsEnabled)
+                        table.item(row, i).setTextAlignment(Qt.AlignCenter)
+                    row += 1
+                table.setRowCount(row)
 
-                    # get assignments and populate table of all assignments
-                    assignmentList = cl.getAssignments()[ind]
-                    table = self.grade_tables[ind]
-                    table.setRowCount(len(assignmentList))
-                    row = 0
-                    for assignment in assignmentList:
-                        num, denom = re.split("[/()]",assignment[1])[1:3]
-                        if float(denom):
-                            percentage = float(num)/float(denom)*100
-                            text = '{0:.{1}f}'.format(percentage, digits)
-                            if digits:
-                                text = text.rstrip('0').rstrip('.')
-                            table.setItem(row, 3, QTableWidgetItem(text + '%'))
-                        else:
-                            if not SettingsDlg.str_bool(self.settings.value('show_empty')):
-                                continue
-                            percentage = None
-                            table.setItem(row, 3, QTableWidgetItem())
-                        table.setItem(row, 0, QTableWidgetItem(assignment[0]))
-                        table.setItem(row, 1, QTableWidgetItem(num))
-                        table.setItem(row, 2, QTableWidgetItem(denom))
-                        if percentage is not None:
-                            for grade in self.GRADE_MINIMUMS:
-                                if percentage > grade[1]:
-                                    table.setItem(row, 4, QTableWidgetItem(grade[0]))
-                                    break
-                        else:
-                            table.setItem(row, 4, QTableWidgetItem('N/A'))
-                        table.item(row, 0).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                        for i in range(1, 5):
-                            table.item(row, i).setFlags(Qt.ItemIsEnabled)
-                            table.item(row, i).setTextAlignment(Qt.AlignCenter)
-                        row += 1
-                    table.setRowCount(row)
-
-                else: #if 'OVERVIEW' is selected
-                    # set stackedwidget to the overview widget, get classes, and populate with a per-quarter overview of each class
-                    self.stack_widget.setCurrentIndex(0)
-                    classes = self.accounts[self.account_list.currentItem().text()].classes
-                    self.overview_table.setRowCount(len(classes))
-                    for row, cl in enumerate(classes):
-                        self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
-                        self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
+            else: #if 'OVERVIEW' is selected
+                # set stackedwidget to the overview widget, get classes, and populate with a per-quarter overview of each class
+                self.stack_widget.setCurrentIndex(0)
+                classes = self.accounts[self.account_list.currentItem().text()].classes
+                self.overview_table.setRowCount(len(classes))
+                for row, cl in enumerate(classes):
+                    self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
+                    self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
+                    
+                    self.overview_table.setItem(row, 1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[0], str(cl.getNumerator()[0]), str(cl.getDenominator()[0])))) 
+                    self.overview_table.setItem(row, 2, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[1], str(cl.getNumerator()[1]), str(cl.getDenominator()[1]))))
+                    self.overview_table.setItem(row, 3, QTableWidgetItem(cl.getGrade()[4]))
+                    self.overview_table.setItem(row, 4, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[2], str(cl.getNumerator()[2]), str(cl.getDenominator()[2])))) 
+                    self.overview_table.setItem(row, 5, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[3], str(cl.getNumerator()[3]), str(cl.getDenominator()[3])))) 
+                    self.overview_table.setItem(row, 6, QTableWidgetItem(cl.getGrade()[5]))
+                    self.overview_table.setItem(row, 7, QTableWidgetItem(cl.getGrade()[6]))
+                    for q in range(7):
+                        self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
+                        self.overview_table.item(row, q+1).setTextAlignment(Qt.AlignCenter)
                         
-                        self.overview_table.setItem(row, 1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[0], str(cl.getNumerator()[0]), str(cl.getDenominator()[0])))) 
-                        self.overview_table.setItem(row, 2, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[1], str(cl.getNumerator()[1]), str(cl.getDenominator()[1]))))
-                        self.overview_table.setItem(row, 3, QTableWidgetItem(cl.getGrade()[4]))
-                        self.overview_table.setItem(row, 4, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[2], str(cl.getNumerator()[2]), str(cl.getDenominator()[2])))) 
-                        self.overview_table.setItem(row, 5, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[3], str(cl.getNumerator()[3]), str(cl.getDenominator()[3])))) 
-                        self.overview_table.setItem(row, 6, QTableWidgetItem(cl.getGrade()[5]))
-                        self.overview_table.setItem(row, 7, QTableWidgetItem(cl.getGrade()[6]))
-                        for q in range(7):
-                            self.overview_table.item(row, q+1).setFlags(Qt.ItemIsEnabled) # no select or edit flags
-                            self.overview_table.item(row, q+1).setTextAlignment(Qt.AlignCenter)
-                        
-            else: # just clear the table if there are no classes selected
-                self.stack_widget.setCurrentIndex(2)
 
     def closeEvent(self, event):
         '''On close, save size and position of the window and exit daemon if necessary'''
