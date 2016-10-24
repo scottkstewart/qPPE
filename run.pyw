@@ -300,6 +300,7 @@ class MainWindow(QMainWindow):
         else: # just clear the table if there are no classes selected
             self.stack_widget.setCurrentIndex(2)
         
+        zstrip = lambda text: text.rstrip('0').rstrip('.') if float(text) else '0'
         # populate main widget
         if self.class_list.currentItem() is not None and ind >= 0:
             # if a class is selected
@@ -315,7 +316,7 @@ class MainWindow(QMainWindow):
                 if cl.getDenominator()[ind]:
                     text = '{0:.{1}f}'.format(cl.getNumerator()[ind]/cl.getDenominator()[ind]*100, digits)
                     if digits:
-                        text = text.rstrip('0').rstrip('.')
+                        text = zstrip(text)
                     totals_table.setItem(0, 2, QTableWidgetItem(text + '%'))
                 else:
                     totals_table.setItem(0, 2, QTableWidgetItem())
@@ -330,12 +331,12 @@ class MainWindow(QMainWindow):
                 table.setRowCount(len(assignmentList))
                 row = 0
                 for assignment in assignmentList:
-                    num, denom = re.split("[/()]",assignment[1])[1:3]
-                    if float(denom):
-                        percentage = float(num)/float(denom)*100
+                    num, denom = [float(st) for st in re.split("[/()]",assignment[1])[1:3]]
+                    if denom:
+                        percentage = num/denom*100
                         text = '{0:.{1}f}'.format(percentage, digits)
                         if digits:
-                            text = text.rstrip('0').rstrip('.')
+                            text = zstrip(text)
                         table.setItem(row, 3, QTableWidgetItem(text + '%'))
                     else:
                         if not SettingsDlg.str_bool(self.settings.value('show_empty')):
@@ -343,8 +344,8 @@ class MainWindow(QMainWindow):
                         percentage = None
                         table.setItem(row, 3, QTableWidgetItem())
                     table.setItem(row, 0, QTableWidgetItem(assignment[0]))
-                    table.setItem(row, 1, QTableWidgetItem(num))
-                    table.setItem(row, 2, QTableWidgetItem(denom))
+                    table.setItem(row, 1, QTableWidgetItem(zstrip(str(num))))
+                    table.setItem(row, 2, QTableWidgetItem(zstrip(str(denom))))
                     if percentage is not None:
                         for grade in self.GRADE_MINIMUMS:
                             if percentage > grade[1]:
@@ -368,11 +369,11 @@ class MainWindow(QMainWindow):
                     self.overview_table.setItem(row, 0, QTableWidgetItem(cl.getName()))
                     self.overview_table.item(row, 0).setFlags(Qt.ItemIsEnabled)
                     
-                    self.overview_table.setItem(row, 1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[0], str(cl.getNumerator()[0]), str(cl.getDenominator()[0])))) 
-                    self.overview_table.setItem(row, 2, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[1], str(cl.getNumerator()[1]), str(cl.getDenominator()[1]))))
+                    self.overview_table.setItem(row, 1, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[0], zstrip(str(cl.getNumerator()[0])), zstrip(str(cl.getDenominator()[0]))))) 
+                    self.overview_table.setItem(row, 2, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[1], zstrip(str(cl.getNumerator()[1])), zstrip(str(cl.getDenominator()[1])))))
                     self.overview_table.setItem(row, 3, QTableWidgetItem(cl.getGrade()[4]))
-                    self.overview_table.setItem(row, 4, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[2], str(cl.getNumerator()[2]), str(cl.getDenominator()[2])))) 
-                    self.overview_table.setItem(row, 5, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[3], str(cl.getNumerator()[3]), str(cl.getDenominator()[3])))) 
+                    self.overview_table.setItem(row, 4, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[2], zstrip(str(cl.getNumerator()[2])), zstrip(str(cl.getDenominator()[2]))))) 
+                    self.overview_table.setItem(row, 5, QTableWidgetItem('{} ({}/{})'.format(cl.getGrade()[3], zstrip(str(cl.getNumerator()[3])), zstrip(str(cl.getDenominator()[3]))))) 
                     self.overview_table.setItem(row, 6, QTableWidgetItem(cl.getGrade()[5]))
                     self.overview_table.setItem(row, 7, QTableWidgetItem(cl.getGrade()[6]))
                     for q in range(7):
